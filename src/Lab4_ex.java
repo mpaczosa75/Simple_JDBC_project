@@ -79,18 +79,18 @@ public class Lab4_ex {
                         stmt.executeUpdate("INSERT IGNORE INTO `BorrowedBy` (`MemberID`,`ISBN`,`CheckoutDate`,`CheckinDate`)  VALUES ("
                                 + transaction.MemberID + "," + "'" +transaction.ISBN+ "'" + ","
                                 + "str_to_date(" + transaction.Checkout_Date + ",'%Y-%m-%d'),"
-                                + "str_to_date(" + transaction.Checkin_Date + ",'%Y-%m-%d')"
-                                + ")");
-                        System.out.println("Successfully checked out Book" + transaction.ISBN);
+                                + "str_to_date(" + transaction.Checkin_Date + ",'%Y-%m-%d'));");
+                        System.out.println("Successfully checked out Book number " + transaction.ISBN);
                     }
                     else{
-                        stmt.executeUpdate("INSERT INTO `BorrowedBy` (`MemberID`,`ISBN`,`CheckoutDate`,`CheckinDate`) DISTINCT  VALUES ("
-                                + transaction.MemberID + "," + transaction.ISBN + ","
-                                + "str_to_date(" + transaction.Checkout_Date + ",'%Y-%m-%d'),"
-                                + "str_to_date(" + transaction.Checkin_Date + ",'%Y-%m-%d')"
-                                + ") WHERE CheckInDate");
-                        System.out.println("Successfully checked out Book" + transaction.ISBN);
-                        System.out.println("hi");
+                        stmt.executeUpdate("UPDATE `BorrowedBy` SET `CheckinDate` = (str_to_date("
+                                + transaction.Checkin_Date + ",'%Y-%m-%d')) WHERE Checkin1Date IS NULL and MemberID = " + transaction.MemberID
+                                + " and ISBN like \"" + transaction.ISBN + "\";");
+
+//                        stmt.executeUpdate("INSERT INTO `BorrowedBy` (`CheckinDate`) DISTINCT VALUE ("
+//                             + "str_to_date(" + transaction.Checkin_Date + ",'%Y-%m-%d')) WHERE "
+//                             + "and MemberID = " + transaction.MemberID + " and ISBN = " + transaction.ISBN + ";");
+                        System.out.println("Successfully checked in Book number " + transaction.ISBN);
 
                     }
 //                rs = stmt.executeQuery(");
