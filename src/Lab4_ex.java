@@ -1,14 +1,14 @@
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.lang.reflect.Member;
 import java.sql.*;
 
 import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.stream.XMLStreamException;
+
 
 import java.io.File;
-import java.text.SimpleDateFormat;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.text.ParseException;
 
 import java.util.ArrayList;
@@ -16,12 +16,12 @@ import java.util.ArrayList;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
-import com.mysql.cj.x.protobuf.MysqlxCrud;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
+
 
 
 
@@ -44,8 +44,11 @@ public class Lab4_ex {
 
         Connection con = null;
 
-        try {
-            Statement stmt;
+        try (FileWriter writer = new FileWriter(args[1]);
+        BufferedWriter filewriter = new BufferedWriter(writer)){
+
+
+                Statement stmt;
             ResultSet rs;
 
             // Register the JDBC driver for MySQL.
@@ -67,36 +70,58 @@ public class Lab4_ex {
 
             for(Lab4_ex transaction:transactions ) {
 
-                System.out.println("MemberID: " + transaction.MemberID);
-                System.out.println("ISBN: " + transaction.ISBN);
-                System.out.println("Checkout_Date: " + transaction.Checkout_Date);
-                System.out.println("Checkin_Date: " + transaction.Checkin_Date);
-                System.out.println("type: " + transaction.type + "\n");
+//                System.out.println("MemberID: " + transaction.MemberID);
+//                System.out.println("ISBN: " + transaction.ISBN);
+//                System.out.println("Checkout_Date: " + transaction.Checkout_Date);
+//                System.out.println("Checkin_Date: " + transaction.Checkin_Date);
+//                System.out.println("type: " + transaction.type + "\n");
+                try  {
 
 
-                try {
+                        ResultSet stmtRs;
+                    stmtRs= stmt.executeQuery("SELECT LibName, TotalCopies FROM StoredOn WHERE ISBN = '" + transaction.ISBN + "' and  TotalCopies > 0;");
+                    int copies = -1;
+                    String library ="";
+                    while (stmtRs.next()){
+                        if(stmtRs.getInt("TotalCopies") > copies){
+                            copies = stmtRs.getInt("TotalCopies");
+                            library = stmtRs.getString("Libname");
+                        }
+                    }
                     if(transaction.type.equals("checkout")){
-                        stmt.executeUpdate("INSERT IGNORE INTO `BorrowedBy` (`MemberID`,`ISBN`,`CheckoutDate`,`CheckinDate`)  VALUES ("
-                                + transaction.MemberID + "," + "'" +transaction.ISBN+ "'" + ","
-                                + "str_to_date(" + transaction.Checkout_Date + ",'%Y-%m-%d'),"
-                                + "str_to_date(" + transaction.Checkin_Date + ",'%Y-%m-%d'));");
-                        System.out.println("Successfully checked out Book number " + transaction.ISBN);
+
+                        if(copies > 0) {
+                            stmt.executeUpdate("INSERT IGNORE INTO `BorrowedBy` (`MemberID`,`ISBN`,`CheckoutDate`,`CheckinDate`)  VALUES ("
+                                    + transaction.MemberID + "," + "'" + transaction.ISBN + "'" + ","
+                                    + "str_to_date(" + transaction.Checkout_Date + ",'%Y-%m-%d'),"
+                                    + "str_to_date(" + transaction.Checkin_Date + ",'%Y-%m-%d'));");
+                            stmt.executeUpdate("UPDATE StoredOn SET TotalCopies = TotalCopies -1 WHERE LibName LIKE '"+library+"';");
+                            filewriter.write("Successfully checked out Book number " + transaction.ISBN + " Total Copies in "+library+" library is "+copies--+".\n");
+                            continue;
+                        }
+                            filewriter.write("Tried to checkout a Book that isn't in a Library.\n");
+
+
                     }
                     else{
+                        stmtRs = stmt.executeQuery(" SELECT MemberID From `BorrowedBy` WHERE CheckinDate IS NULL and "
+                                +"CheckOutDate IS NOT NULL and MemberID = " + transaction.MemberID
+                                +" and ISBN like '"+ transaction.ISBN+"';");
+                        stmtRs.next();
+                        stmtRs.getString("MemberID");
+
                         stmt.executeUpdate("UPDATE `BorrowedBy` SET `CheckinDate` = (str_to_date("
-                                + transaction.Checkin_Date + ",'%Y-%m-%d')) WHERE Checkin1Date IS NULL and MemberID = " + transaction.MemberID
+                                + transaction.Checkin_Date + ",'%Y-%m-%d')) WHERE CheckinDate IS NULL and "
+                                + "CheckOutDate IS NOT NULL and MemberID = " + transaction.MemberID
                                 + " and ISBN like \"" + transaction.ISBN + "\";");
 
-//                        stmt.executeUpdate("INSERT INTO `BorrowedBy` (`CheckinDate`) DISTINCT VALUE ("
-//                             + "str_to_date(" + transaction.Checkin_Date + ",'%Y-%m-%d')) WHERE "
-//                             + "and MemberID = " + transaction.MemberID + " and ISBN = " + transaction.ISBN + ";");
-                        System.out.println("Successfully checked in Book number " + transaction.ISBN);
+                        stmt.executeUpdate("UPDATE StoredOn SET TotalCopies = TotalCopies + 1 WHERE LibName LIKE '"+library+"';");
+
+                        filewriter.write("Successfully checked in Book number " + transaction.ISBN+" Total Copies in "+library+" library is "+copies--+".\n");
 
                     }
-//                rs = stmt.executeQuery(");
-//                while (rs.next()) {
-//                    System.out.println (rs.getString("AuthorID"));
-//                }
+//
+                    stmtRs.close();
                 } catch (Exception e) {
                     System.out.println(e);
                     if(transaction.type.equals("checkout")) {
@@ -108,17 +133,33 @@ public class Lab4_ex {
                     );
                 }//end catch
             }
+            System.out.println();
      try {
          rs = stmt.executeQuery("SELECT * FROM BorrowedBy;");
          while (rs.next()) {
 
-             System.out.println("MemberID: " +  rs.getString("MemberID"));
-             System.out.println("ISBN: " + rs.getString("ISBN"));
-             System.out.println("Checkout_Date: " + rs.getString("CheckoutDate"));
-             System.out.println("Checkin_Date: " + rs.getString("CheckinDate") + "\n");
+             filewriter.write("MemberID: " +  rs.getString("MemberID")+"\n");
+             filewriter.write("ISBN: " + rs.getString("ISBN")+"\n");
+             filewriter.write("Checkout_Date: " + rs.getString("CheckoutDate")+"\n");
+             filewriter.write("Checkin_Date: " + rs.getString("CheckinDate") + "\n\n");
 
          }
-         rs = stmt.executeQuery("");
+         rs = stmt.executeQuery("Select Last_Name,First_Name,m.MemberID,Title From Member as m join BorrowedBy as br " +
+                 "on m.MemberID = br.MemberID join Book as b on br.ISBN = b.ISBN Where " +
+                 "CheckoutDate IS NOT NULL ORDER BY m.MemberID;\n");
+         String memberID ="";
+         while (rs.next()){
+          String instance = rs.getString("MemberID");
+             if(!instance.equals(memberID)){
+                 filewriter.write("\n");
+                 filewriter.write(rs.getString("First_Name")+" "+rs.getString("Last_Name")
+                 +"  has Checked out: '"+ rs.getString("Title")+"' ");
+             }
+             else {
+                 filewriter.write("'"+rs.getString("Title")+"' ");
+             }
+             memberID = instance;
+         }
      }
      catch (Exception e){
          e.printStackTrace();
@@ -201,11 +242,6 @@ public class Lab4_ex {
                     else {
                         checkin_date = parseSqlDate(temp);
                     }
-
-
-
-
-                    //System.out.println("Checkin_date : " + ((Node) cid.item(0)).getNodeValue().trim());
 
                     Lab4_ex transaction = new Lab4_ex(memberID, isbn, checkout_date, checkin_date, type );
                     transactions.add(transactions.size(),transaction);
