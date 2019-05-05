@@ -21,10 +21,11 @@ public class Lab4B_ex
     private static String searchMethod = "";
     private static String queryStatement = null;
     private static ResultSet queryRs = null;
+    String exit = "";
     public static void main (String[] args)
     {
         String memberID;
-        int finished = 0;
+        String finished = "";
         int  memberTrue = 0;
 
         String memberString = "Select COUNT(*) FROM Member Where MemberID = ?;";
@@ -37,11 +38,12 @@ public class Lab4B_ex
             try (Connection conn = DriverManager.getConnection(url, "mpaczosa", "830862054");
 
             ) {
-                while(finished != 1) {
+                while(!finished.contains("y")) {
+                    finished ="";
                     System.out.println("Asking for value");
 
                     // Get the value
-                    memberID = JOptionPane.showInputDialog("Enter your MemberID:");
+beginning:          memberID = JOptionPane.showInputDialog("Enter your MemberID:");
                     // https://gist.github.com/nickodell/ab4bde0b141374f1714fe71e4ea023ac
                     PreparedStatement prepareMember = conn.prepareStatement(memberString);
                     prepareMember.setString(1, memberID);
@@ -49,23 +51,32 @@ public class Lab4B_ex
                     memberRs.next();
                     memberTrue = memberRs.getInt(1);
 
-                    while(memberTrue != 1) {
+                    if(memberTrue != 1) {
                         String createUser = JOptionPane.showInputDialog(null,
                                 memberID + " is not a Library member, would you like to create an account? (Y/N)");
-                        switch (createUser.toLowerCase()){
+                        switch (createUser.toLowerCase()) {
                             case "y":
-                                enterMember(conn);
-
+                                enterMember(conn, memberID);
+                                memberTrue = 1;
                                 break;
                             case "n":
+                                while (!(finished.contains("y") || finished.contains("n")))
+                                    finished = JOptionPane.showInputDialog(null, "Would You like to exit the program (y/n)").toLowerCase();
+                                memberTrue = 0;
+                                finished = "";
                                 break;
-                            default: break;
+                            default:
+                                break;
                         }
-                    }
+                        continue;
 
+                    }
                     while(!validSearch()) {
                     setQuery(conn);
+                        while(!(finished.contains("y") || finished.contains("n")))
+                            finished = JOptionPane.showInputDialog(null,"Would You like to exit the program (y/n)").toLowerCase();
                     }
+                   searchMethod ="";
                 }
             }
         }
@@ -149,10 +160,12 @@ public class Lab4B_ex
                     lastName = author.replace(author.substring(0, author.indexOf(" ") + 1), "");
                 }
 
-                queryStatement = "SELECT Title from Author JOIN WrittenBy on Author.AuthorID = WrittenBy.AuthorID JOIN Book on WrittenBy.ISBN = Book.ISBN where FirstName LIKE ? or LastName LIKE ?;";
+                queryStatement = "SELECT Title from Author JOIN WrittenBy on Author.AuthorID = WrittenBy.AuthorID JOIN Book on WrittenBy.ISBN = Book.ISBN where FirstName = ? or LastName = ? or LastName = ? or FirstName =?;";
                 PreparedStatement prepareMember = conn.prepareStatement(queryStatement);
-                prepareMember.setString(1, "%" + firstName + "%");
-                prepareMember.setString(2, "%" + lastName + "%");
+                prepareMember.setString(1,  firstName);
+                prepareMember.setString(2,  lastName );
+                prepareMember.setString(3, lastName);
+                prepareMember.setString(4,firstName);
 
                 int totalCopies = -1;
                 ArrayList<String> titles = new ArrayList();
@@ -180,9 +193,9 @@ public class Lab4B_ex
                 }
                 innerLoop:
                 while (true) {
-                    title = JOptionPane.showInputDialog(null, body);
+                    title = JOptionPane.showInputDialog(null, body).toLowerCase();
                     for (String book : titles)
-                        if (title.equals(book)) break innerLoop;
+                        if (title.equals(book.toLowerCase())) break innerLoop;
                 }
 
                 queryStatement = "SELECT TotalCopies, Book.ISBN,Shelf_Number, LibName from StoredOn JOIN Book on StoredOn.ISBN = Book.ISBN where Title LIKE ?;";
@@ -198,11 +211,64 @@ public class Lab4B_ex
                     libraries.add(queryRs.getString(4));
                 }
                 printResults(title,ISBN,totalCopies,libraries, shelves);
-
+                break;
             }
     }
     private static void executeTitlequery(Connection conn)throws SQLException{
+        while (true) {
+            String partialTitle = JOptionPane.showInputDialog("Enter Title").toLowerCase();
 
+
+            queryStatement = "SELECT Title from Author JOIN WrittenBy on Author.AuthorID = WrittenBy.AuthorID JOIN Book on WrittenBy.ISBN = Book.ISBN where Title LIKE ?;";
+            PreparedStatement prepareMember = conn.prepareStatement(queryStatement);
+            prepareMember.setString(1, "%" + partialTitle + "%");
+
+            int totalCopies = -1;
+            ArrayList<String> titles = new ArrayList();
+            String title = "";
+            String ISBN = "";
+            ArrayList<String> shelves = new ArrayList<>();
+            ArrayList<String> libraries = new ArrayList<>();
+            String body = "";
+
+            queryRs = prepareMember.executeQuery();
+            while (queryRs.next()) {
+                titles.add(queryRs.getString(1));
+            }
+            if (titles.size() > 0) {
+                body = "Choose one of the following books" + ": \n";
+                for (int i = 0; i < titles.size(); i++) {
+                    body += titles.get(i);
+                    if (i < titles.size() - 1) {
+                        body += ", ";
+                    }
+                }
+            } else {
+                JOptionPane.showMessageDialog(null, "No books in stock by under " + partialTitle);
+                break;
+            }
+            innerLoop:
+            while (true) {
+                title = JOptionPane.showInputDialog(null, body).toLowerCase();
+                for (String book : titles)
+                    if (title.equals(book.toLowerCase())) break innerLoop;
+            }
+
+            queryStatement = "SELECT TotalCopies, Book.ISBN,Shelf_Number, LibName from StoredOn JOIN Book on StoredOn.ISBN = Book.ISBN where Title LIKE ?;";
+            prepareMember = conn.prepareStatement(queryStatement);
+            prepareMember.setString(1, title);
+
+
+            queryRs = prepareMember.executeQuery();
+            while (queryRs.next()) {
+                totalCopies = queryRs.getInt(1);
+                ISBN = queryRs.getString(2);
+                shelves.add(queryRs.getString(3));
+                libraries.add(queryRs.getString(4));
+            }
+            printResults(title,ISBN,totalCopies,libraries, shelves);
+            break;
+        }
     }
     private static void printResults(String title, String ISBN, int totalCopies, ArrayList list, ArrayList shelves ){
             if (totalCopies > 0){
@@ -226,12 +292,19 @@ public class Lab4B_ex
                     "Title : " + title + " is not in stock.");
             return;
         }
-    private static void enterMember(Connection conn){
+    private static void enterMember(Connection conn, String memberID) throws SQLException {
         String firstName = JOptionPane.showInputDialog("Enter your First Name");
         String lastName = JOptionPane.showInputDialog("Enter your Last Name");
-        String gender = JOptionPane.showInputDialog("Enter Your Gender: (M|F) or leave blank");
+        String gender = JOptionPane.showInputDialog("Enter Your Gender: (M|F) or leave blank").toUpperCase();
         String DOB = JOptionPane.showInputDialog("Enter your Date of Birth (yyyy-mm-dd)");
-        queryStatement = "INSERT INTO Member Values (" + firstName +","+lastName+","+gender+","+DOB+");";
+        queryStatement = "INSERT INTO Member Values (?,?,?,?,?);";
+        PreparedStatement update = conn.prepareStatement(queryStatement);
+        update.setString(1,memberID);
+        update.setString(2,firstName);
+        update.setString(3,lastName);
+        update.setString(4,gender);
+        update.setString(5, DOB);
+        update.executeUpdate();
     }
 
 } // end
